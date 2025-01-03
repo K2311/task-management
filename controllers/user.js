@@ -49,11 +49,11 @@ let login = async (req, res) => {
     if (!validPassword) return res.status(400).send('Invalid password');
 
     // Create and assign a token
-    const token = jwt.sign({ _id: user._id }, process.env.TOKEN_SECRET);
-    res.header('auth-token', token).send({
+    const token = jwt.sign({ _id: user._id ,role:user.role }, process.env.TOKEN_SECRET);
+    res.header('Authorization', `Bearer ${token}`).status(200).json({
         message: 'Logged in successfully',
         token
-    });
+    });;
     
 }
 
@@ -63,7 +63,7 @@ const logout = async (req, res) => {
         res.clearCookie('auth-token');
 
         // Send a structured response
-        res.status(200).send({
+        res.status(200).json({
             message: 'Logged out successfully',
             success: true,
         });
