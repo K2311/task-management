@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Add in your layout.ejs or index.ejs -->
+   
+
+</head>
+<body>
+    <div id="toast-container"></div>
+
+    <div class="container mt-5">
+        <nav class="navbar navbar-expand-lg navbar-light bg-light">
+            <div class="container-fluid">
+                <a class="navbar-brand" href="#">Task Management</a>
+                <div class="d-flex">
+                    <button id="logoutButton" class="btn btn-outline-danger">Logout</button>
+                </div>
+            </div>
+        </nav>
+        <h1 class="text-center mb-4">Dashboard</h1>
+        <div class="row">
+            <div class="col-md-7">
+                <!-- Task List -->
+                <h4>Your Tasks</h4>
+                <ul id="taskList" class="list-group">
+                    <!-- Tasks will be dynamically inserted here -->
+                </ul>
+            </div>
+            <div class="col-md-5">
+                <!-- Form to Create Task -->
+                <div class="card mb-4" id="taskForm-div">
+                    <div class="card-body">
+                        <h5 class="card-title">Create Task</h5>
+                        <form id="taskForm">
+                            <div class="mb-3">
+                                <label for="taskTitle" class="form-label">Title</label>
+                                <input type="text" id="taskTitle" class="form-control" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="taskDescription" class="form-label">Description</label>
+                                <textarea id="taskDescription" class="form-control" required></textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label for="dueDate" class="form-label">Due Date</label>
+                                <input type="date" id="dueDate" class="form-control" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="taskStatus" class="form-label">Status</label>
+                                <select id="taskStatus" class="form-control" required>
+                                    <option value="To Do">To Do</option>
+                                    <option value="In Progress">In Progress</option>
+                                    <option value="Done">Done</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="assignedTo" class="form-label">Assign To</label>
+                                <select id="assignedTo" class="form-control" required>
+                                    <!-- Users will be loaded dynamically here -->
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Create Task</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const userId = localStorage.getItem('userId');
+        const socket = io();  // Initialize Socket.IO
+    
+        // Listen for task updates
+        socket.on('taskUpdated', (data) => {
+            console.log(data.message);
+            alert(data.message);
+
+            // Check if the toast container already exists
+            let toastContainer = document.getElementById('toast-container');
+            if (!toastContainer) {
+                toastContainer = document.createElement('div');
+                toastContainer.id = 'toast-container';
+                toastContainer.style.position = 'fixed';
+                toastContainer.style.top = '20px';
+                toastContainer.style.right = '20px';
+                toastContainer.style.zIndex = '9999';
+                document.body.appendChild(toastContainer);
+            }
+
+            // Create a new toast
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.style.backgroundColor = '#333';
+            toast.style.color = '#fff';
+            toast.style.padding = '10px 15px';
+            toast.style.marginBottom = '10px';
+            toast.style.borderRadius = '5px';
+            toast.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)';
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.3s ease-in-out';
+
+            // Set the message
+            toast.innerText = data.message;
+
+            // Append the toast to the container
+            toastContainer.appendChild(toast);
+
+            // Fade in the toast
+            setTimeout(() => {
+                toast.style.opacity = '1';
+            }, 100);
+
+            // Remove the toast after 5 seconds
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => {
+                    toast.remove();
+                }, 300);
+            }, 5000);
+        });
+
+        socket.emit('userConnected', userId);
+        // Listen for task deletions
+        socket.on('taskDeleted', (data) => {
+            console.log(data.message);  // Handle task deletion notification
+        });
+    </script>
+
+    <script>
+        const token = localStorage.getItem('auth-token');
+        const userRole = localStorage.getItem('user-role');
+        if (!token) {
+            window.location.href = '/login'; 
+        }
+        if(userRole!=="Admin"){
+            document.getElementById('taskForm-div').style.display = 'none';
+        }
+        
+        async function fetchTasks() {
+            const token = localStorage.getItem('auth-token'); 
+            const userRole = localStorage.getItem('user-role');
+            try {
+                const response = await fetch('/api/tasks', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const data = await response.json();
+                const taskList = document.getElementById('taskList');
+                taskList.innerHTML = '';  // Clear existing tasks
+
+                data.tasks.forEach(task => {
+                    const li = document.createElement('li');
+                    li.classList.add('list-group-item');
+                    li.innerHTML = `
+                        <strong>${task.title}</strong><br>
+                        ${task.description}<br>
+                        Status: ${task.status}<br>
+                        Assigned To: ${task.assignedTo}
+                        <button class="btn btn-warning btn-sm float-end ms-2" onclick="editTask('${task._id}')">Edit</button>
+                    `;
+
+                    // Show "Delete" button only for admins
+                    if (userRole === 'Admin') {
+                        const deleteButton = document.createElement('button');
+                        deleteButton.className = 'btn btn-danger btn-sm float-end';
+                        deleteButton.innerText = 'Delete';
+                        deleteButton.onclick = () => deleteTask(task._id);
+
+                        li.appendChild(deleteButton);
+                    }
+                    taskList.appendChild(li);
+                });
+            } catch (error) {
+                console.error('Error fetching tasks:', error);
+            }
+        }
+
+       
+        async function fetchUsers() {
+            const token = localStorage.getItem('auth-token');
+
+            try {
+                const response = await fetch('/api/users', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const users = await response.json();
+
+                const assignedToDropdown = document.getElementById('assignedTo');
+                assignedToDropdown.innerHTML = '<option value="">Select a user</option>';
+
+                users.forEach(user => {
+                    const option = document.createElement('option');
+                    option.value = user._id;
+                    option.textContent = user.username;
+                    assignedToDropdown.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error fetching users:', error);
+            }
+        }
+
+        document.getElementById('taskForm').addEventListener('submit', async function(event) {
+            event.preventDefault();
+
+            const title = document.getElementById('taskTitle').value;
+            const description = document.getElementById('taskDescription').value;
+            const status = document.getElementById('taskStatus').value;
+            const assignedTo = document.getElementById('assignedTo').value;
+            const dueDate = document.getElementById('dueDate').value;
+
+            const token = localStorage.getItem('auth-token');
+
+            // Ensure all required fields are present
+            const taskData = { title, description, status, assignedTo, dueDate };
+
+            try {
+                const response = await fetch('/api/tasks', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(taskData)
+                });
+
+                if (response.ok) {
+                    alert('Task created successfully');
+                    fetchTasks();  // Refresh task list
+                } else {
+                    const error = await response.json();
+                    alert(`Error: ${error.message}`);
+                }
+            } catch (err) {
+                console.error('Error creating task:', err);
+            }
+        });
+
+        document.getElementById('logoutButton').addEventListener('click', function() {
+            localStorage.removeItem('auth-token');
+            window.location.href = '/login';
+        });
+        async function deleteTask(taskId) {
+            const token = localStorage.getItem('auth-token');
+            try {
+                const response = await fetch(`/api/tasks/${taskId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    alert('Task deleted successfully');
+                    fetchTasks();  // Refresh task list
+                } else {
+                    alert('Error deleting task');
+                }
+            } catch (error) {
+                console.error('Error deleting task:', error);
+            }
+        }
+
+        // ✅ Function to edit a task
+        function editTask(taskId) {
+            // Redirect to an edit task page
+            window.location.href = `/tasks/edit/${taskId}`;
+        }
+
+        // ✅ Call fetch functions to load tasks and users when the page loads
+        fetchTasks();
+        fetchUsers();
+    </script>
+</body>
+</html>

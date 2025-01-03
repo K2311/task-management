@@ -52,7 +52,10 @@ let login = async (req, res) => {
     const token = jwt.sign({ _id: user._id ,role:user.role }, process.env.TOKEN_SECRET);
     res.header('Authorization', `Bearer ${token}`).status(200).json({
         message: 'Logged in successfully',
-        token
+        token,
+        role:user.role,
+        userId:user._id
+
     });;
     
 }
@@ -77,9 +80,19 @@ const logout = async (req, res) => {
     }
 };
 
+const getAllUsers = async (req, res) => {
+    try {
+        const users = await User.find({}, 'username email _id'); // Fetch username, email, and _id only
+        res.status(200).json(users);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching users' });
+    }
+};
+
 
 module.exports = {
     register,
     login,
-    logout
+    logout,
+    getAllUsers
 };
